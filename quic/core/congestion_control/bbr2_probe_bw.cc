@@ -52,6 +52,7 @@ Bbr2Mode Bbr2ProbeBwMode::OnCongestionEvent(
     }
   }
 
+  // 是否需要进入probe_rtt阶段
   bool switch_to_probe_rtt = false;
 
   if (cycle_.phase == CyclePhase::PROBE_UP) {
@@ -72,6 +73,7 @@ Bbr2Mode Bbr2ProbeBwMode::OnCongestionEvent(
   // Do not need to set the gains if switching to PROBE_RTT, they will be set
   // when Bbr2ProbeRttMode::Enter is called.
   if (!switch_to_probe_rtt) {
+    // 设置增速因子
     model_->set_pacing_gain(PacingGainForPhase(cycle_.phase));
     model_->set_cwnd_gain(Params().probe_bw_cwnd_gain);
   }
@@ -132,9 +134,11 @@ void Bbr2ProbeBwMode::UpdateProbeDown(
     const Bbr2CongestionEvent& congestion_event) {
   QUICHE_DCHECK_EQ(cycle_.phase, CyclePhase::PROBE_DOWN);
 
+  // 如果探测只有一轮
   if (cycle_.rounds_in_phase == 1 && congestion_event.end_of_round_trip) {
     cycle_.is_sample_from_probing = false;
 
+    // 并没有app limit
     if (!congestion_event.last_sample_is_app_limited) {
       QUIC_DVLOG(2)
           << sender_
@@ -143,6 +147,7 @@ void Bbr2ProbeBwMode::UpdateProbeDown(
       cycle_.has_advanced_max_bw = true;
     }
 
+    // 上一轮因探测激进而结束，或上一轮探测值太高，重新开始新一轮探测
     if (last_cycle_stopped_risky_probe_ && !last_cycle_probed_too_high_) {
       EnterProbeRefill(/*probe_up_rounds=*/0, congestion_event.event_time);
       return;
@@ -151,11 +156,13 @@ void Bbr2ProbeBwMode::UpdateProbeDown(
 
   MaybeAdaptUpperBounds(congestion_event);
 
+  // 是否开启新一轮探测
   if (IsTimeToProbeBandwidth(congestion_event)) {
     EnterProbeRefill(/*probe_up_rounds=*/0, congestion_event.event_time);
     return;
   }
 
+  // 超过预定时间，进入巡航阶段
   if (HasStayedLongEnoughInProbeDown(congestion_event)) {
     QUIC_DVLOG(3) << sender_ << " Proportional time based PROBE_DOWN exit";
     EnterProbeCruise(congestion_event.event_time);
@@ -172,6 +179,7 @@ void Bbr2ProbeBwMode::UpdateProbeDown(
       << ", inflight_with_headroom:" << inflight_with_headroom;
   QuicByteCount bytes_in_flight = congestion_event.bytes_in_flight;
 
+  // 当前发送数据量依然太多
   if (bytes_in_flight > inflight_with_headroom) {
     // Stay in PROBE_DOWN.
     return;
@@ -181,6 +189,7 @@ void Bbr2ProbeBwMode::UpdateProbeDown(
   QuicByteCount bdp = model_->BDP();
   QUIC_DVLOG(3) << sender_ << " Checking if drained to target. bytes_in_flight:"
                 << bytes_in_flight << ", bdp:" << bdp;
+  // 发送数据量小于带宽，进入巡航阶段
   if (bytes_in_flight < bdp) {
     EnterProbeCruise(congestion_event.event_time);
   }
@@ -197,7 +206,9 @@ Bbr2ProbeBwMode::AdaptUpperBoundsResult Bbr2ProbeBwMode::MaybeAdaptUpperBounds(
 
   // TODO(ianswett): Rename to bytes_delivered if
   // use_bytes_delivered_for_inflight_hi is default enabled.
+  // 当前发送的inflight字节数
   QuicByteCount inflight_at_send = BytesInFlight(send_state);
+  // 用acked数据差来表示inflight字节数
   if (Params().use_bytes_delivered_for_inflight_hi) {
     if (congestion_event.last_packet_send_state.total_bytes_acked <=
         model_->total_bytes_acked()) {
@@ -211,12 +222,15 @@ Bbr2ProbeBwMode::AdaptUpperBoundsResult Bbr2ProbeBwMode::MaybeAdaptUpperBounds(
           << congestion_event.last_packet_send_state.total_bytes_acked << ")";
     }
   }
+
+  // 判断是否发送数据太多了
   if (model_->IsInflightTooHigh(congestion_event,
                                 Params().probe_bw_full_loss_count)) {
     if (cycle_.is_sample_from_probing) {
       cycle_.is_sample_from_probing = false;
 
       if (!send_state.is_app_limited) {
+        // 计算调整后的inflight数    旧值*0.7
         const QuicByteCount inflight_target =
             sender_->GetTargetBytesInflight() * (1.0 - Params().beta);
         if (inflight_at_send >= inflight_target) {
@@ -245,6 +259,7 @@ Bbr2ProbeBwMode::AdaptUpperBoundsResult Bbr2ProbeBwMode::MaybeAdaptUpperBounds(
                         << congestion_event.event_time;
           model_->set_inflight_hi(new_inflight_hi);
         } else {
+          // 调整inflight
           model_->set_inflight_hi(std::max(inflight_at_send, inflight_target));
         }
       }
@@ -256,12 +271,14 @@ Bbr2ProbeBwMode::AdaptUpperBoundsResult Bbr2ProbeBwMode::MaybeAdaptUpperBounds(
     return ADAPTED_OK;
   }
 
+  // inflight没变化
   if (model_->inflight_hi() == model_->inflight_hi_default()) {
     QUIC_DVLOG(3) << sender_ << " " << cycle_.phase
                   << ": NOT_ADAPTED_INFLIGHT_HIGH_NOT_SET";
     return NOT_ADAPTED_INFLIGHT_HIGH_NOT_SET;
   }
 
+  // inflight 增大也没有发送丢包拥塞，则继续将增大的inflight设置为目标
   // Raise the upper bound for inflight.
   if (inflight_at_send > model_->inflight_hi()) {
     QUIC_DVLOG(3)
@@ -363,6 +380,7 @@ void Bbr2ProbeBwMode::RaiseInflightHighSlope() {
 void Bbr2ProbeBwMode::ProbeInflightHighUpward(
     const Bbr2CongestionEvent& congestion_event) {
   QUICHE_DCHECK_EQ(cycle_.phase, CyclePhase::PROBE_UP);
+  // 是否发送窗口限制
   if (!model_->IsCongestionWindowLimited(congestion_event)) {
     QUIC_DVLOG(3) << sender_
                   << " Raising inflight_hi early return: Not cwnd limited.";
@@ -370,6 +388,7 @@ void Bbr2ProbeBwMode::ProbeInflightHighUpward(
     return;
   }
 
+  // 发送窗口小于发送期望量
   if (congestion_event.prior_cwnd < model_->inflight_hi()) {
     QUIC_DVLOG(3)
         << sender_
@@ -378,6 +397,7 @@ void Bbr2ProbeBwMode::ProbeInflightHighUpward(
     return;
   }
 
+  // 计算新的提升后的inflight_hi
   // Increase inflight_hi by the number of probe_up_bytes within probe_up_acked.
   cycle_.probe_up_acked += congestion_event.bytes_acked;
   if (cycle_.probe_up_acked >= cycle_.probe_up_bytes) {
@@ -399,7 +419,7 @@ void Bbr2ProbeBwMode::ProbeInflightHighUpward(
           << model_->inflight_hi() << ", new value:" << new_inflight_hi;
     }
   }
-
+  // 本轮探测结束
   if (congestion_event.end_of_round_trip) {
     RaiseInflightHighSlope();
   }
@@ -423,6 +443,7 @@ void Bbr2ProbeBwMode::UpdateProbeRefill(
   MaybeAdaptUpperBounds(congestion_event);
   QUICHE_DCHECK(!cycle_.is_sample_from_probing);
 
+  // 进入带宽增加探测阶段
   if (cycle_.rounds_in_phase > 0 && congestion_event.end_of_round_trip) {
     EnterProbeUp(congestion_event.event_time);
     return;
@@ -433,7 +454,9 @@ void Bbr2ProbeBwMode::UpdateProbeUp(
     QuicByteCount prior_in_flight,
     const Bbr2CongestionEvent& congestion_event) {
   QUICHE_DCHECK_EQ(cycle_.phase, CyclePhase::PROBE_UP);
+  // 如果当前带宽之过高
   if (MaybeAdaptUpperBounds(congestion_event) == ADAPTED_PROBED_TOO_HIGH) {
+    // 进入降低带宽阶段
     EnterProbeDown(/*probed_too_high=*/true, /*stopped_risky_probe=*/false,
                    congestion_event.event_time);
     return;
@@ -443,8 +466,10 @@ void Bbr2ProbeBwMode::UpdateProbeUp(
 
   ProbeInflightHighUpward(congestion_event);
 
+  // 是否过于激进
   bool is_risky = false;
   bool is_queuing = false;
+  // 前一轮探测带宽设置过高，并且前一轮的in_flight 比现在大
   if (last_cycle_probed_too_high_ && prior_in_flight >= model_->inflight_hi()) {
     is_risky = true;
     QUIC_DVLOG(3) << sender_
@@ -454,6 +479,7 @@ void Bbr2ProbeBwMode::UpdateProbeUp(
                   << ", inflight_hi:" << model_->inflight_hi();
     // TCP uses min_rtt instead of a full round:
     //   HasPhaseLasted(model_->MinRtt(), congestion_event)
+  // 检测是否发生包排队
   } else if (cycle_.rounds_in_phase > 0) {
     const QuicByteCount bdp = model_->BDP();
     QuicByteCount queuing_threshold_extra_bytes = 2 * kDefaultTCPMSS;
@@ -476,6 +502,7 @@ void Bbr2ProbeBwMode::UpdateProbeUp(
                   << ", min_rtt:" << model_->MinRtt();
   }
 
+  // 如果发生排队，或过于激进，则进入降低期望带宽阶段
   if (is_risky || is_queuing) {
     EnterProbeDown(/*probed_too_high=*/false, /*stopped_risky_probe=*/is_risky,
                    congestion_event.event_time);

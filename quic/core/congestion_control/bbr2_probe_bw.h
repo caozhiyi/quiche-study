@@ -76,16 +76,22 @@ class QUIC_EXPORT_PRIVATE Bbr2ProbeBwMode final : public Bbr2ModeBase {
     NOT_ADAPTED_INVALID_SAMPLE,
   };
 
+  // 调整带宽值。设置medol的inflight
   // Return whether adapted inflight_hi. If inflight is too high, this function
   // will not adapt inflight_hi and will return false.
   AdaptUpperBoundsResult MaybeAdaptUpperBounds(
       const Bbr2CongestionEvent& congestion_event);
 
+  // 开启新一轮探测周期，主要初始化Cycle成员
+  // 进入带宽降低阶段
   void EnterProbeDown(bool probed_too_high,
                       bool stopped_risky_probe,
                       QuicTime now);
+  // 进入巡航阶段
   void EnterProbeCruise(QuicTime now);
+  // 新一轮探测
   void EnterProbeRefill(uint64_t probe_up_rounds, QuicTime now);
+  // 进入带宽提升阶段
   void EnterProbeUp(QuicTime now);
 
   // Call right before the exit of PROBE_DOWN.
@@ -94,10 +100,13 @@ class QUIC_EXPORT_PRIVATE Bbr2ProbeBwMode final : public Bbr2ModeBase {
   float PercentTimeElapsedToProbeBandwidth(
       const Bbr2CongestionEvent& congestion_event) const;
 
+  // 新一轮探测带宽开始？
   bool IsTimeToProbeBandwidth(
       const Bbr2CongestionEvent& congestion_event) const;
+  // 在ProbeDown阶段已经超过一个最小rtt时间
   bool HasStayedLongEnoughInProbeDown(
       const Bbr2CongestionEvent& congestion_event) const;
+  // 到达本轮探测结束时间
   bool HasCycleLasted(QuicTime::Delta duration,
                       const Bbr2CongestionEvent& congestion_event) const;
   bool HasPhaseLasted(QuicTime::Delta duration,
@@ -107,6 +116,7 @@ class QUIC_EXPORT_PRIVATE Bbr2ProbeBwMode final : public Bbr2ModeBase {
       const Bbr2CongestionEvent& congestion_event) const;
 
   void RaiseInflightHighSlope();
+  // 可能提高inflight_hi
   void ProbeInflightHighUpward(const Bbr2CongestionEvent& congestion_event);
 
   struct QUIC_EXPORT_PRIVATE Cycle {
@@ -125,6 +135,7 @@ class QUIC_EXPORT_PRIVATE Bbr2ProbeBwMode final : public Bbr2ModeBase {
     bool is_sample_from_probing = false;
   } cycle_;
 
+  // 上一轮探测过高
   bool last_cycle_probed_too_high_;
   bool last_cycle_stopped_risky_probe_;
 };

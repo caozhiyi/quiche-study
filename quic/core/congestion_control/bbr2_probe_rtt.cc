@@ -12,6 +12,7 @@ namespace quic {
 
 void Bbr2ProbeRttMode::Enter(QuicTime /*now*/,
                              const Bbr2CongestionEvent* /*congestion_event*/) {
+  // 设置增速因子
   model_->set_pacing_gain(1.0);
   model_->set_cwnd_gain(1.0);
   exit_time_ = QuicTime::Zero();
@@ -24,9 +25,11 @@ Bbr2Mode Bbr2ProbeRttMode::OnCongestionEvent(
     const LostPacketVector& /*lost_packets*/,
     const Bbr2CongestionEvent& congestion_event) {
   if (exit_time_ == QuicTime::Zero()) {
+    // 当前发送数据小于带宽的一半，或小于发送窗体大小
     if (congestion_event.bytes_in_flight <= InflightTarget() ||
         congestion_event.bytes_in_flight <=
             sender_->GetMinimumCongestionWindow()) {
+      // 获取退出PROBE_RTT阶段时间值
       exit_time_ = congestion_event.event_time + Params().probe_rtt_duration;
       QUIC_DVLOG(2) << sender_ << " PROBE_RTT exit time set to " << exit_time_
                     << ". bytes_inflight:" << congestion_event.bytes_in_flight
@@ -38,6 +41,7 @@ Bbr2Mode Bbr2ProbeRttMode::OnCongestionEvent(
     return Bbr2Mode::PROBE_RTT;
   }
 
+  // 检测是否到了退出时间
   return congestion_event.event_time > exit_time_ ? Bbr2Mode::PROBE_BW
                                                   : Bbr2Mode::PROBE_RTT;
 }

@@ -24,6 +24,7 @@
 
 namespace quic {
 
+// bbrv2 拥塞控制算法
 class QUIC_EXPORT_PRIVATE Bbr2Sender final : public SendAlgorithmInterface {
  public:
   Bbr2Sender(QuicTime now,
@@ -75,6 +76,7 @@ class QUIC_EXPORT_PRIVATE Bbr2Sender final : public SendAlgorithmInterface {
 
   void OnConnectionMigration() override {}
 
+  // 是否可以发送，已发数据小于滑动窗口
   bool CanSend(QuicByteCount bytes_in_flight) override;
 
   QuicBandwidth PacingRate(QuicByteCount bytes_in_flight) const override;
@@ -104,6 +106,7 @@ class QUIC_EXPORT_PRIVATE Bbr2Sender final : public SendAlgorithmInterface {
     return cwnd_limits().Min();
   }
 
+  // 在发送窗口大小和BDP中返回最小的一个
   // Returns the min of BDP and congestion window.
   QuicByteCount GetTargetBytesInflight() const;
 
@@ -139,7 +142,9 @@ class QUIC_EXPORT_PRIVATE Bbr2Sender final : public SendAlgorithmInterface {
   DebugState ExportDebugState() const;
 
  private:
+  // 更新发送速率，(当前速率乘以增速因子)
   void UpdatePacingRate(QuicByteCount bytes_acked);
+  // 更新滑动窗体大小，(根据带宽，增速因子和最小rtt)
   void UpdateCongestionWindow(QuicByteCount bytes_acked);
   QuicByteCount GetTargetCongestionWindow(float gain) const;
   void OnEnterQuiescence(QuicTime now);
@@ -188,6 +193,7 @@ class QUIC_EXPORT_PRIVATE Bbr2Sender final : public SendAlgorithmInterface {
   const QuicByteCount initial_cwnd_;
 
   // Current cwnd and pacing rate.
+  // 当前窗体大小和发送速度
   QuicByteCount cwnd_;
   QuicBandwidth pacing_rate_;
 

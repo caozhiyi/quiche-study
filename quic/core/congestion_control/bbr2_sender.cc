@@ -236,16 +236,20 @@ void Bbr2Sender::OnCongestionEvent(bool /*rtt_updated*/,
   model_.OnCongestionEventStart(event_time, acked_packets, lost_packets,
                                 &congestion_event);
 
+  // 处于慢启动阶段
   if (InSlowStart()) {
+    // 有丢包情况出现
     if (!lost_packets.empty()) {
       connection_stats_->slowstart_packets_lost += lost_packets.size();
       connection_stats_->slowstart_bytes_lost += congestion_event.bytes_lost;
     }
+    // 本轮结束
     if (congestion_event.end_of_round_trip) {
       ++connection_stats_->slowstart_num_rtts;
     }
   }
 
+  // 每个拥塞事件bbr状态机变更次数
   // Number of mode changes allowed for this congestion event.
   int mode_changes_allowed = kMaxModeChangesPerCongestionEvent;
   while (true) {
@@ -253,12 +257,14 @@ void Bbr2Sender::OnCongestionEvent(bool /*rtt_updated*/,
         OnCongestionEvent(prior_in_flight, event_time, acked_packets,
                           lost_packets, congestion_event));
 
+    // bbr状态机无变化
     if (next_mode == mode_) {
       break;
     }
 
     QUIC_DVLOG(2) << this << " Mode change:  " << mode_ << " ==> " << next_mode
                   << "  @ " << event_time;
+    // bbr状态机变更
     BBR2_MODE_DISPATCH(Leave(event_time, &congestion_event));
     mode_ = next_mode;
     BBR2_MODE_DISPATCH(Enter(event_time, &congestion_event));
@@ -270,10 +276,12 @@ void Bbr2Sender::OnCongestionEvent(bool /*rtt_updated*/,
     }
   }
 
+  // 更新发送速率
   UpdatePacingRate(congestion_event.bytes_acked);
   QUIC_BUG_IF(quic_bug_10443_2, pacing_rate_.IsZero())
       << "Pacing rate must not be zero!";
 
+  // 更新滑动窗体大小
   UpdateCongestionWindow(congestion_event.bytes_acked);
   QUIC_BUG_IF(quic_bug_10443_3, cwnd_ == 0u)
       << "Congestion window must not be zero!";
@@ -314,13 +322,16 @@ void Bbr2Sender::UpdatePacingRate(QuicByteCount bytes_acked) {
     return;
   }
 
+  // 第一个返回的ack包
   if (model_.total_bytes_acked() == bytes_acked) {
     // After the first ACK, cwnd_ is still the initial congestion window.
     pacing_rate_ = QuicBandwidth::FromBytesAndTimeDelta(cwnd_, model_.MinRtt());
     return;
   }
 
+  // 增速因子乘以当前带宽估计
   QuicBandwidth target_rate = model_.pacing_gain() * model_.BandwidthEstimate();
+  // 触达带宽上限
   if (model_.full_bandwidth_reached()) {
     pacing_rate_ = target_rate;
     return;

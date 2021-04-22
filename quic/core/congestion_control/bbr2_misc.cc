@@ -145,6 +145,7 @@ void Bbr2NetworkModel::OnCongestionEventStart(
     congestion_event->bytes_in_flight = 0;
   }
 
+  // 发生数据丢失，统计丢失数据
   if (congestion_event->bytes_lost > 0) {
     bytes_lost_in_round_ += congestion_event->bytes_lost;
     loss_events_in_round_++;
@@ -304,18 +305,22 @@ void Bbr2NetworkModel::UpdateNetworkParameters(QuicTime::Delta rtt) {
 
 bool Bbr2NetworkModel::MaybeExpireMinRtt(
     const Bbr2CongestionEvent& congestion_event) {
+  // 最小rtt还没有过期
   if (congestion_event.event_time <
       (MinRttTimestamp() + Params().probe_rtt_period)) {
     return false;
   }
+  // 当前样本最小rtt无效
   if (congestion_event.sample_min_rtt.IsInfinite()) {
     return false;
   }
   QUIC_DVLOG(3) << "Replacing expired min rtt of " << min_rtt_filter_.Get()
                 << " by " << congestion_event.sample_min_rtt << "  @ "
                 << congestion_event.event_time;
+  // 更新rtt              
   min_rtt_filter_.ForceUpdate(congestion_event.sample_min_rtt,
                               congestion_event.event_time);
+  
   return true;
 }
 
@@ -330,16 +335,19 @@ bool Bbr2NetworkModel::IsCongestionWindowLimited(
 bool Bbr2NetworkModel::IsInflightTooHigh(
     const Bbr2CongestionEvent& congestion_event,
     int64_t max_loss_events) const {
+  // 最后包的发送状态快照
   const SendTimeState& send_state = congestion_event.last_packet_send_state;
   if (!send_state.is_valid) {
     // Not enough information.
     return false;
   }
 
+  // 本轮发生丢数据的次数少于阈值
   if (loss_events_in_round() < max_loss_events) {
     return false;
   }
 
+  // 获取infight数据量
   const QuicByteCount inflight_at_send = BytesInFlight(send_state);
   // TODO(wub): Consider total_bytes_lost() - send_state.total_bytes_lost, which
   // is the total bytes lost when the largest numbered packet was inflight.
@@ -353,9 +361,11 @@ bool Bbr2NetworkModel::IsInflightTooHigh(
                 << ", lost_in_round_threshold:"
                 << inflight_at_send * Params().loss_threshold;
 
+  // 有发送且发生丢失
   if (inflight_at_send > 0 && bytes_lost_in_round > 0) {
     QuicByteCount lost_in_round_threshold =
         inflight_at_send * Params().loss_threshold;
+    // 丢失数据量超过阈值
     if (bytes_lost_in_round > lost_in_round_threshold) {
       return true;
     }

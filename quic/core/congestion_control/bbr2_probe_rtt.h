@@ -12,6 +12,7 @@
 
 namespace quic {
 
+// 排空包的排队，获取最小rtt引擎策略
 class Bbr2Sender;
 class QUIC_EXPORT_PRIVATE Bbr2ProbeRttMode final : public Bbr2ModeBase {
  public:
@@ -45,7 +46,7 @@ class QUIC_EXPORT_PRIVATE Bbr2ProbeRttMode final : public Bbr2ModeBase {
 
  private:
   const Bbr2Params& Params() const;
-
+  // 将带宽减半，计算期望Inflight
   QuicByteCount InflightTarget() const;
 
   QuicTime exit_time_ = QuicTime::Zero();

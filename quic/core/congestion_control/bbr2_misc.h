@@ -361,6 +361,7 @@ class QUIC_EXPORT_PRIVATE Bbr2NetworkModel {
   // Update inflight/bandwidth short-term lower bounds.
   void AdaptLowerBounds(const Bbr2CongestionEvent& congestion_event);
 
+  // 开启新一轮探测
   // Restart the current round trip as if it is starting now.
   void RestartRoundEarly();
 
@@ -385,6 +386,7 @@ class QUIC_EXPORT_PRIVATE Bbr2NetworkModel {
 
   // TODO(wub): If we do this too frequently, we can potentailly postpone
   // PROBE_RTT indefinitely. Observe how it works in production and improve it.
+  // 更新rtt时间
   void PostponeMinRttTimestamp(QuicTime::Delta duration) {
     min_rtt_filter_.ForceUpdate(MinRtt(), MinRttTimestamp() + duration);
   }
@@ -426,8 +428,9 @@ class QUIC_EXPORT_PRIVATE Bbr2NetworkModel {
 
   // Return true if the number of loss events exceeds max_loss_events and
   // fraction of bytes lost exceed the loss threshold.
+  // 通过丢失数据，判断是否是发送的数据太多了导致堵塞丢包
   bool IsInflightTooHigh(const Bbr2CongestionEvent& congestion_event,
-                         int64_t max_loss_events) const;
+                         int64_t max_loss_events/*数据丢失次数上限*/) const;
 
   enum BandwidthGrowth {
     APP_LIMITED = 0,
@@ -528,8 +531,10 @@ class QUIC_EXPORT_PRIVATE Bbr2NetworkModel {
   Bbr2MaxBandwidthFilter max_bandwidth_filter_;
   MinRttFilter min_rtt_filter_;
 
+  // 本轮丢失的数据量
   // Bytes lost in the current round. Updated once per congestion event.
   QuicByteCount bytes_lost_in_round_ = 0;
+  // 本轮丢失发生次数
   // Number of loss marking events in the current round.
   int64_t loss_events_in_round_ = 0;
 

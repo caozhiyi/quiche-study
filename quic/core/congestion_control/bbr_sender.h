@@ -27,6 +27,7 @@ namespace quic {
 
 class RttStats;
 
+// bbrv2 拥塞控制算法
 // BbrSender implements BBR congestion control algorithm.  BBR aims to estimate
 // the current available Bottleneck Bandwidth and RTT (hence the name), and
 // regulates the pacing rate and the size of the congestion window based on

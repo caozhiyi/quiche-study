@@ -29,6 +29,7 @@ using QuicRoundTripCount = uint64_t;
 class CachedNetworkParameters;
 class RttStats;
 
+// 拥塞控制策略接口
 class QUIC_EXPORT_PRIVATE SendAlgorithmInterface {
  public:
   // Network Params for AdjustNetworkParameters.
