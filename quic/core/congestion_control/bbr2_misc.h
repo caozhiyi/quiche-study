@@ -230,12 +230,16 @@ class QUIC_EXPORT_PRIVATE RoundTripCounter {
   void RestartRound();
 
  private:
+  // 轮数统计，当接到的ack比last_sent_packet_算一轮
   QuicRoundTripCount round_trip_count_;
+  // 最后发送的 packet number， 尚未ack
   QuicPacketNumber last_sent_packet_;
+  // 最后发送并ack的 packet number
   // The last sent packet number of the current round trip.
-  QuicPacketNumber end_of_round_trip_;
+  QuicPacketNumber end_of_round_trip_; 
 };
 
+// 最小rtt过滤器，可以强制更新
 class QUIC_EXPORT_PRIVATE MinRttFilter {
  public:
   MinRttFilter(QuicTime::Delta initial_min_rtt,
@@ -243,7 +247,9 @@ class QUIC_EXPORT_PRIVATE MinRttFilter {
 
   void Update(QuicTime::Delta sample_rtt, QuicTime now);
 
-  void ForceUpdate(QuicTime::Delta sample_rtt, QuicTime now);
+  void Force
+  
+  Update(QuicTime::Delta sample_rtt, QuicTime now);
 
   QuicTime::Delta Get() const { return min_rtt_; }
 
@@ -255,6 +261,7 @@ class QUIC_EXPORT_PRIVATE MinRttFilter {
   QuicTime min_rtt_timestamp_;
 };
 
+// 最大带宽过滤器, 只有增大时会更新
 class QUIC_EXPORT_PRIVATE Bbr2MaxBandwidthFilter {
  public:
   void Update(QuicBandwidth sample) {
