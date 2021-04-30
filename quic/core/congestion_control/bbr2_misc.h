@@ -289,11 +289,14 @@ class QUIC_EXPORT_PRIVATE Bbr2MaxBandwidthFilter {
 // Information that are meaningful only when Bbr2Sender::OnCongestionEvent is
 // running.
 struct QUIC_EXPORT_PRIVATE Bbr2CongestionEvent {
+  // 事件时间
   QuicTime event_time = QuicTime::Zero();
 
+  // 前一轮拥塞窗体大小
   // The congestion window prior to the processing of the ack/loss events.
   QuicByteCount prior_cwnd;
 
+  // 前一轮 inflight 数据量
   // Total bytes inflight before the processing of the ack/loss events.
   QuicByteCount prior_bytes_in_flight = 0;
 
@@ -306,6 +309,7 @@ struct QUIC_EXPORT_PRIVATE Bbr2CongestionEvent {
   // Total bytes lost from losses in this event.
   QuicByteCount bytes_lost = 0;
 
+  // 是否属于探测周期最后一轮
   // Whether acked_packets indicates the end of a round trip.
   bool end_of_round_trip = false;
 
@@ -446,6 +450,7 @@ class QUIC_EXPORT_PRIVATE Bbr2NetworkModel {
     EXIT = 3,  // Too many rounds without bandwidth growth.
   };
 
+  // 主要用于检测是否退出 start up 状态
   // 检查带宽增长
   // Check bandwidth growth in the past round. Must be called at the end of a
   // round.

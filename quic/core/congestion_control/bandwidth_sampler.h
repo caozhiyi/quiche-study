@@ -425,9 +425,11 @@ class QUIC_EXPORT_PRIVATE BandwidthSampler : public BandwidthSamplerInterface {
   // that moment.
   struct QUIC_EXPORT_PRIVATE ConnectionStateOnSentPacket {
     // Time at which the packet is sent.
+    // 发送时间
     QuicTime sent_time;
 
     // Size of the packet.
+    // 包大小
     QuicByteCount size;
 
     // The value of |total_bytes_sent_at_last_acked_packet_| at the time the
@@ -518,6 +520,7 @@ class QUIC_EXPORT_PRIVATE BandwidthSampler : public BandwidthSamplerInterface {
   // The total number of congestion controlled bytes sent during the connection.
   QuicByteCount total_bytes_sent_;
 
+  // ack 数据总量
   // The total number of congestion controlled bytes which were acknowledged.
   QuicByteCount total_bytes_acked_;
 
@@ -525,7 +528,7 @@ class QUIC_EXPORT_PRIVATE BandwidthSampler : public BandwidthSamplerInterface {
   // The total number of congestion controlled bytes which were lost.
   QuicByteCount total_bytes_lost_;
 
-  // 拥塞控制字节总数。
+  // 撤销数据总量
   // The total number of congestion controlled bytes which have been neutered.
   QuicByteCount total_bytes_neutered_;
 
@@ -534,25 +537,30 @@ class QUIC_EXPORT_PRIVATE BandwidthSampler : public BandwidthSamplerInterface {
   // was sent. Valid only when |last_acked_packet_sent_time_| is valid.
   QuicByteCount total_bytes_sent_at_last_acked_packet_;
 
-  // 样本中最后一个ack包的发送时间
+  // 最后一个ack包的发送时间
   // The time at which the last acknowledged packet was sent. Set to
   // QuicTime::Zero() if no valid timestamp is available.
   QuicTime last_acked_packet_sent_time_;
 
+  // 最近确认包时间
   // The time at which the most recent packet was acknowledged.
   QuicTime last_acked_packet_ack_time_;
 
+  // 最近发送数据包编号
   // The most recently sent packet.
   QuicPacketNumber last_sent_packet_;
 
+  // 是否处于app limit阶段
   // Indicates whether the bandwidth sampler is currently in an app-limited
   // phase.
   bool is_app_limited_;
 
+  // app limit 阶段的最后一个数据包编号
   // The packet that will be acknowledged after this one will cause the sampler
   // to exit the app-limited phase.
   QuicPacketNumber end_of_app_limited_phase_;
 
+  // 发送包时的状态集合
   // Record of the connection state at the point where each packet in flight was
   // sent, indexed by the packet number.
   PacketNumberIndexedQueue<ConnectionStateOnSentPacket> connection_state_map_;

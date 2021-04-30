@@ -550,6 +550,7 @@ void Bbr2ProbeBwMode::EnterProbeCruise(QuicTime now) {
                 << now - cycle_.phase_start_time << ", or "
                 << cycle_.rounds_in_phase << " rounds.  @ " << now;
 
+  // 将 height inflight 设置为 low inflight
   model_->cap_inflight_lo(model_->inflight_hi());
   cycle_.phase = CyclePhase::PROBE_CRUISE;
   cycle_.rounds_in_phase = 0;

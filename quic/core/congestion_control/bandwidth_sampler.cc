@@ -251,13 +251,16 @@ BandwidthSampler::OnCongestionEvent(QuicTime ack_time,
   // 遍历ack包，统计接收数据量
   for (const auto& packet : acked_packets) {
     BandwidthSample sample =
+        // 计算带宽和rtt
         OnPacketAcknowledged(ack_time, packet.packet_number);
     if (!sample.state_at_send.is_valid) {
       continue;
     }
 
+    // 更新最后的发送状态
     last_acked_packet_send_state = sample.state_at_send;
 
+    // 
     if (!sample.rtt.IsZero()) {
       event_sample.sample_rtt = std::min(event_sample.sample_rtt, sample.rtt);
     }
@@ -297,6 +300,7 @@ BandwidthSampler::OnCongestionEvent(QuicTime ack_time,
 QuicByteCount BandwidthSampler::OnAckEventEnd(
     QuicBandwidth bandwidth_estimate,
     QuicRoundTripCount round_trip_count) {
+  // 最新确认数据量
   const QuicByteCount newly_acked_bytes =
       total_bytes_acked_ - total_bytes_acked_after_last_ack_event_;
 
@@ -336,6 +340,7 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
     QuicTime ack_time,
     QuicPacketNumber packet_number,
     const ConnectionStateOnSentPacket& sent_packet) {
+  // 更新总量类数据
   total_bytes_acked_ += sent_packet.size;
   total_bytes_sent_at_last_acked_packet_ =
       sent_packet.send_time_state.total_bytes_sent;
@@ -345,6 +350,7 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
     recent_ack_points_.Update(ack_time, total_bytes_acked_);
   }
 
+  // 判断退出applimit 
   if (is_app_limited_) {
     // Exit app-limited phase in two cases:
     // (1) end_of_app_limited_phase_ is not initialized, i.e., so far all
@@ -357,6 +363,7 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
     }
   }
 
+  // 还没有包确认过
   // There might have been no packets acknowledged at the moment when the
   // current packet was sent. In that case, there is no bandwidth sample to
   // make.
@@ -370,6 +377,7 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
   // current send rate sample and use only the ack rate.
   QuicBandwidth send_rate = QuicBandwidth::Infinite();
   if (sent_packet.sent_time > sent_packet.last_acked_packet_sent_time) {
+    // 当前发送速度 = （当前发送时的数据量 - 最后一个ack时的总数据量） / (当前发送时间 - 最后一个ack的时间)
     send_rate = QuicBandwidth::FromBytesAndTimeDelta(
         sent_packet.send_time_state.total_bytes_sent -
             sent_packet.total_bytes_sent_at_last_acked_packet,
@@ -388,6 +396,7 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
   // During the slope calculation, ensure that ack time of the current packet is
   // always larger than the time of the previous packet, otherwise division by
   // zero or integer underflow can occur.
+  // 最后一个ack的时间 比当前ack时间还大，报错
   if (ack_time <= a0.ack_time) {
     // TODO(wub): Compare this code count before and after fixing clock jitter
     // issue.
@@ -408,14 +417,17 @@ BandwidthSample BandwidthSampler::OnPacketAcknowledgedInner(
         << ", sent_packet:" << sent_packet;
     return BandwidthSample();
   }
+  // ack 速度 = (当前ack总量 - 上一个ack总量) / (当前ack时间 - 上一个ack时间)
   QuicBandwidth ack_rate = QuicBandwidth::FromBytesAndTimeDelta(
       total_bytes_acked_ - a0.total_bytes_acked, ack_time - a0.ack_time);
 
+  // 带宽值 = min(发送速度, ack速度)
   BandwidthSample sample;
   sample.bandwidth = std::min(send_rate, ack_rate);
   // Note: this sample does not account for delayed acknowledgement time.  This
   // means that the RTT measurements here can be artificially high, especially
   // on low bandwidth connections.
+  // 计算rtt
   sample.rtt = ack_time - sent_packet.sent_time;
   SentPacketToSendTimeState(sent_packet, &sample.state_at_send);
 

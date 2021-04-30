@@ -77,8 +77,9 @@ void Bbr2NetworkModel::OnPacketSent(QuicTime sent_time,
                                     QuicPacketNumber packet_number,
                                     QuicByteCount bytes,
                                     HasRetransmittableData is_retransmittable) {
+  // 更新统计轮次
   round_trip_counter_.OnPacketSent(packet_number);
-
+  // 更新数量统计
   bandwidth_sampler_.OnPacketSent(sent_time, packet_number, bytes,
                                   bytes_in_flight, is_retransmittable);
 }
@@ -92,11 +93,13 @@ void Bbr2NetworkModel::OnCongestionEventStart(
   const QuicByteCount prior_bytes_lost = total_bytes_lost();
 
   congestion_event->event_time = event_time;
+  // 一轮结束，指发送出去的包全部ack
   congestion_event->end_of_round_trip =
       acked_packets.empty() ? false
                             : round_trip_counter_.OnPacketsAcked(
                                   acked_packets.rbegin()->packet_number);
 
+  // 获取本轮采集 带宽 rtt数据
   BandwidthSamplerInterface::CongestionEventSample sample =
       bandwidth_sampler_.OnCongestionEvent(event_time, acked_packets,
                                            lost_packets, MaxBandwidth(),
@@ -111,11 +114,13 @@ void Bbr2NetworkModel::OnCongestionEventStart(
   // Avoid updating |max_bandwidth_filter_| if a) this is a loss-only event, or
   // b) all packets in |acked_packets| did not generate valid samples. (e.g. ack
   // of ack-only packets). In both cases, total_bytes_acked() will not change.
+  // 已经确认过ack，则可以计算带宽值
   if (prior_bytes_acked != total_bytes_acked()) {
     QUIC_LOG_IF(WARNING, sample.sample_max_bandwidth.IsZero())
         << total_bytes_acked() - prior_bytes_acked << " bytes from "
         << acked_packets.size()
         << " packets have been acked, but sample_max_bandwidth is zero.";
+    // 没有 applimit , 更新最大带宽
     if (!sample.sample_is_app_limited ||
         sample.sample_max_bandwidth > MaxBandwidth()) {
       congestion_event->sample_max_bandwidth = sample.sample_max_bandwidth;
@@ -123,14 +128,18 @@ void Bbr2NetworkModel::OnCongestionEventStart(
     }
   }
 
+  // 更新rtt
   if (!sample.sample_rtt.IsInfinite()) {
     congestion_event->sample_min_rtt = sample.sample_rtt;
     min_rtt_filter_.Update(congestion_event->sample_min_rtt, event_time);
   }
 
+  // 设置本次 ack 和 lost 数据量
   congestion_event->bytes_acked = total_bytes_acked() - prior_bytes_acked;
   congestion_event->bytes_lost = total_bytes_lost() - prior_bytes_lost;
 
+  // 更新 inflight
+  // inflight 比 ack 和 lost总和大，说明还有inflight数据
   if (congestion_event->prior_bytes_in_flight >=
       congestion_event->bytes_acked + congestion_event->bytes_lost) {
     congestion_event->bytes_in_flight =
@@ -145,7 +154,7 @@ void Bbr2NetworkModel::OnCongestionEventStart(
     congestion_event->bytes_in_flight = 0;
   }
 
-  // 发生数据丢失，统计丢失数据
+  // 发生数据丢失，累计丢失轮次
   if (congestion_event->bytes_lost > 0) {
     bytes_lost_in_round_ += congestion_event->bytes_lost;
     loss_events_in_round_++;
@@ -317,7 +326,7 @@ bool Bbr2NetworkModel::MaybeExpireMinRtt(
   QUIC_DVLOG(3) << "Replacing expired min rtt of " << min_rtt_filter_.Get()
                 << " by " << congestion_event.sample_min_rtt << "  @ "
                 << congestion_event.event_time;
-  // 更新rtt              
+  // 更新rtt
   min_rtt_filter_.ForceUpdate(congestion_event.sample_min_rtt,
                               congestion_event.event_time);
   
@@ -329,6 +338,7 @@ bool Bbr2NetworkModel::IsCongestionWindowLimited(
   QuicByteCount prior_bytes_in_flight = congestion_event.bytes_in_flight +
                                         congestion_event.bytes_acked +
                                         congestion_event.bytes_lost;
+  // 发送数据量 大于 拥塞窗口大小
   return prior_bytes_in_flight >= congestion_event.prior_cwnd;
 }
 
